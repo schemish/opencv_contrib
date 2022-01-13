@@ -107,6 +107,9 @@ int main(int argc, char *argv[]) {
             cerr << "Invalid detector parameters file" << endl;
             return 0;
         }
+    } else {
+        detectorParams = aruco::DetectorParameters::create();
+        std::cout << "Using default detector params" << std::endl;
     }
 
     if(!parser.check()) {
@@ -132,10 +135,15 @@ int main(int argc, char *argv[]) {
         return 0;
     }
 
+    std::cout << "Opening video capture with source: (" << video << ")..." << std::endl;
     VideoCapture inputVideo;
     int waitTime;
     if(!video.empty()) {
-        inputVideo.open(video);
+        std::cout << "Asking to open video capture with backend CAP_IMAGES" << std::endl;
+        // See https://docs.opencv.org/3.4/d4/d15/group__videoio__flags__base.html#ga023786be1ee68a9105bf2e48c700294d
+        // GSTREAMER(1000); V4L2(990); CV_IMAGES(980); CV_MJPEG(970) 
+        inputVideo.open(video, CAP_IMAGES); // img_%02d.jpg
+        // inputVideo.open(video);
         waitTime = 0;
     } else {
         inputVideo.open(camId);
@@ -144,6 +152,7 @@ int main(int argc, char *argv[]) {
 
     float axisLength = 0.5f * ((float)min(squaresX, squaresY) * (squareLength));
 
+    std::cout << "Create charuco board." << std::endl;
     // create charuco board object
     Ptr<aruco::CharucoBoard> charucoboard =
         aruco::CharucoBoard::create(squaresX, squaresY, squareLength, markerLength, dictionary);
@@ -152,7 +161,10 @@ int main(int argc, char *argv[]) {
     double totalTime = 0;
     int totalIterations = 0;
 
+    std::cout << "Video grab starting..." << std::endl;
     while(inputVideo.grab()) {
+        std::cout << "Video grab iteration:" << totalIterations << std::endl;
+        
         Mat image, imageCopy;
         inputVideo.retrieve(image);
 
@@ -163,15 +175,19 @@ int main(int argc, char *argv[]) {
         vector< Point2f > charucoCorners;
         Vec3d rvec, tvec;
 
+        std::cout << "detect markers" << std::endl;
         // detect markers
         aruco::detectMarkers(image, dictionary, markerCorners, markerIds, detectorParams,
                              rejectedMarkers);
 
         // refind strategy to detect more markers
-        if(refindStrategy)
+        if(refindStrategy) {
+            std::cout << "refind strategy to detect more markers" << std::endl;
             aruco::refineDetectedMarkers(image, board, markerCorners, markerIds, rejectedMarkers,
                                          camMatrix, distCoeffs);
+        }
 
+        std::cout << "interpolate charuco corners" << std::endl;
         // interpolate charuco corners
         int interpolatedCorners = 0;
         if(markerIds.size() > 0)
@@ -179,6 +195,7 @@ int main(int argc, char *argv[]) {
                 aruco::interpolateCornersCharuco(markerCorners, markerIds, image, charucoboard,
                                                  charucoCorners, charucoIds, camMatrix, distCoeffs);
 
+        std::cout << "estimate charuco board pose" << std::endl;
         // estimate charuco board pose
         bool validPose = false;
         if(camMatrix.total() != 0)
@@ -197,27 +214,37 @@ int main(int argc, char *argv[]) {
 
 
 
+        std::cout << "draw results" << std::endl;
         // draw results
         image.copyTo(imageCopy);
         if(markerIds.size() > 0) {
+            std::cout << "drawDetectedMarkers - 1" << std::endl;
             aruco::drawDetectedMarkers(imageCopy, markerCorners);
         }
 
-        if(showRejected && rejectedMarkers.size() > 0)
+        if(showRejected && rejectedMarkers.size() > 0) {
+            std::cout << "drawDetectedMarkers - 2" << std::endl;
             aruco::drawDetectedMarkers(imageCopy, rejectedMarkers, noArray(), Scalar(100, 0, 255));
+        }
 
         if(interpolatedCorners > 0) {
+            std::cout << "drawDetectedCornersCharuco" << std::endl;
             Scalar color;
             color = Scalar(255, 0, 0);
             aruco::drawDetectedCornersCharuco(imageCopy, charucoCorners, charucoIds, color);
         }
 
-        if(validPose)
+        if(validPose) {
+            std::cout << "drawAxis" << std::endl;            
             aruco::drawAxis(imageCopy, camMatrix, distCoeffs, rvec, tvec, axisLength);
+        }
 
-        imshow("out", imageCopy);
-        char key = (char)waitKey(waitTime);
-        if(key == 27) break;
+        std::cout << "imshow() commented out" << std::endl;
+        if (false) {        
+            imshow("out", imageCopy);
+            char key = (char)waitKey(waitTime);
+            if(key == 27) break;
+        }
     }
 
     return 0;

@@ -110,6 +110,9 @@ int main(int argc, char *argv[]) {
             cerr << "Invalid detector parameters file" << endl;
             return 0;
         }
+    } else {
+        detectorParams = aruco::DetectorParameters::create();
+        std::cout << "Using default detector params" << std::endl;
     }
 
     bool refindStrategy = parser.get<bool>("rs");
@@ -125,15 +128,21 @@ int main(int argc, char *argv[]) {
         return 0;
     }
 
+    std::cout << "Opening video capture with source: (" << video << ")..." << std::endl;
     VideoCapture inputVideo;
     int waitTime;
     if(!video.empty()) {
-        inputVideo.open(video);
+        std::cout << "Asking to open video capture with backend CAP_IMAGES" << std::endl;
+        // See https://docs.opencv.org/3.4/d4/d15/group__videoio__flags__base.html#ga023786be1ee68a9105bf2e48c700294d
+        // GSTREAMER(1000); V4L2(990); CV_IMAGES(980); CV_MJPEG(970) 
+        inputVideo.open(video, CAP_IMAGES); // img_%02d.jpg
+        // inputVideo.open(video);
         waitTime = 0;
     } else {
         inputVideo.open(camId);
         waitTime = 10;
     }
+    std::cout << "Opened video capture." << std::endl;
 
     Ptr<aruco::Dictionary> dictionary;
     if (parser.has("d")) {
@@ -153,6 +162,7 @@ int main(int argc, char *argv[]) {
         return 0;
     }
 
+    std::cout << "Create charuco board." << std::endl;
     // create charuco board object
     Ptr<aruco::CharucoBoard> charucoboard =
             aruco::CharucoBoard::create(squaresX, squaresY, squareLength, markerLength, dictionary);
@@ -164,44 +174,71 @@ int main(int argc, char *argv[]) {
     vector< Mat > allImgs;
     Size imgSize;
 
+    int totalIterations = 0;
+    std::cout << "Video grab starting..." << std::endl;
     while(inputVideo.grab()) {
+        std::cout << "Video grab iteration:" << (totalIterations++) << std::endl;
         Mat image, imageCopy;
         inputVideo.retrieve(image);
 
         vector< int > ids;
         vector< vector< Point2f > > corners, rejected;
 
+        std::cout << "detect markers" << std::endl;
         // detect markers
         aruco::detectMarkers(image, dictionary, corners, ids, detectorParams, rejected);
 
         // refind strategy to detect more markers
-        if(refindStrategy) aruco::refineDetectedMarkers(image, board, corners, ids, rejected);
+        if(refindStrategy) {
+            std::cout << "refind strategy to detect more markers" << std::endl;
+            aruco::refineDetectedMarkers(image, board, corners, ids, rejected);
+        }
 
         // interpolate charuco corners
         Mat currentCharucoCorners, currentCharucoIds;
-        if(ids.size() > 0)
+        if(ids.size() > 0) {
+            std::cout << "interpolate charuco corners" << std::endl;
             aruco::interpolateCornersCharuco(corners, ids, image, charucoboard, currentCharucoCorners,
                                              currentCharucoIds);
+        }
 
+        std::cout << "draw results" << std::endl;
         // draw results
         image.copyTo(imageCopy);
-        if(ids.size() > 0) aruco::drawDetectedMarkers(imageCopy, corners);
 
-        if(currentCharucoCorners.total() > 0)
+        if(ids.size() > 0) {
+            std::cout << "drawDetectedMarkers - 1" << std::endl;
+            aruco::drawDetectedMarkers(imageCopy, corners);
+        }
+
+        if(currentCharucoCorners.total() > 0) {
+            std::cout << "drawDetectedCornersCharuco" << std::endl;
             aruco::drawDetectedCornersCharuco(imageCopy, currentCharucoCorners, currentCharucoIds);
+        }
 
         putText(imageCopy, "Press 'c' to add current frame. 'ESC' to finish and calibrate",
                 Point(10, 20), FONT_HERSHEY_SIMPLEX, 0.5, Scalar(255, 0, 0), 2);
 
-        imshow("out", imageCopy);
-        char key = (char)waitKey(waitTime);
-        if(key == 27) break;
-        if(key == 'c' && ids.size() > 0) {
-            cout << "Frame captured" << endl;
-            allCorners.push_back(corners);
-            allIds.push_back(ids);
-            allImgs.push_back(image);
-            imgSize = image.size();
+        std::cout << "imshow() commented out" << std::endl;
+        if (false) {        
+            imshow("out", imageCopy);
+            char key = (char)waitKey(waitTime);
+            if(key == 27) break;
+            if(key == 'c' && ids.size() > 0) {
+                cout << "Frame captured" << endl;
+                allCorners.push_back(corners);
+                allIds.push_back(ids);
+                allImgs.push_back(image);
+                imgSize = image.size();
+            }
+        } else {
+            if(ids.size() > 0) {
+                cout << "Frame captured" << endl;
+                allCorners.push_back(corners);
+                allIds.push_back(ids);
+                allImgs.push_back(image);
+                imgSize = image.size();
+            }
         }
     }
 
@@ -219,6 +256,7 @@ int main(int argc, char *argv[]) {
         cameraMatrix.at< double >(0, 0) = aspectRatio;
     }
 
+    std::cout << "prepare data for calibration" << std::endl;
     // prepare data for calibration
     vector< vector< Point2f > > allCornersConcatenated;
     vector< int > allIdsConcatenated;
@@ -232,12 +270,14 @@ int main(int argc, char *argv[]) {
         }
     }
 
+    std::cout << "calibrate camera using aruco markers" << std::endl;
     // calibrate camera using aruco markers
     double arucoRepErr;
     arucoRepErr = aruco::calibrateCameraAruco(allCornersConcatenated, allIdsConcatenated,
                                               markerCounterPerFrame, board, imgSize, cameraMatrix,
                                               distCoeffs, noArray(), noArray(), calibrationFlags);
 
+    std::cout << "prepare data for charuco calibration" << std::endl;
     // prepare data for charuco calibration
     int nFrames = (int)allCorners.size();
     vector< Mat > allCharucoCorners;
@@ -247,6 +287,7 @@ int main(int argc, char *argv[]) {
     allCharucoIds.reserve(nFrames);
 
     for(int i = 0; i < nFrames; i++) {
+        std::cout << "interpolate using camera parameters, frame:" << i << std::endl;
         // interpolate using camera parameters
         Mat currentCharucoCorners, currentCharucoIds;
         aruco::interpolateCornersCharuco(allCorners[i], allIds[i], allImgs[i], charucoboard,
@@ -263,13 +304,19 @@ int main(int argc, char *argv[]) {
         return 0;
     }
 
+    std::cout << "calibrate camera using charuco" << std::endl;
     // calibrate camera using charuco
     repError =
         aruco::calibrateCameraCharuco(allCharucoCorners, allCharucoIds, charucoboard, imgSize,
                                       cameraMatrix, distCoeffs, rvecs, tvecs, calibrationFlags);
 
-    bool saveOk =  saveCameraParams(outputFile, imgSize, aspectRatio, calibrationFlags,
-                                    cameraMatrix, distCoeffs, repError);
+    std::cout << "Ignoring rvecs, tvecs" << std::endl;
+
+    //bool saveOk =  saveCameraParams(outputFile, imgSize, aspectRatio, calibrationFlags,
+    //                                cameraMatrix, distCoeffs, repError);
+
+    bool saveOk =  saveCameraParams2(outputFile, imgSize, aspectRatio, calibrationFlags,
+                                    cameraMatrix, distCoeffs, repError, rvecs, tvecs);
     if(!saveOk) {
         cerr << "Cannot save output file" << endl;
         return 0;
@@ -281,6 +328,7 @@ int main(int argc, char *argv[]) {
 
     // show interpolated charuco corners for debugging
     if(showChessboardCorners) {
+        std::cout << "show interpolated charuco corners for debugging" << std::endl;
         for(unsigned int frame = 0; frame < filteredImages.size(); frame++) {
             Mat imageCopy = filteredImages[frame].clone();
             if(allIds[frame].size() > 0) {

@@ -41,6 +41,8 @@ the use of this software, even if advised of the possibility of such damage.
 #include <opencv2/core.hpp>
 #include <opencv2/imgproc.hpp>
 
+#include <iostream>
+
 #include "apriltag_quad_thresh.hpp"
 #include "zarray.hpp"
 
@@ -1163,12 +1165,14 @@ static void _apriltag(Mat im_orig, const Ptr<DetectorParameters> & _params, std:
 void detectMarkers(InputArray _image, const Ptr<Dictionary> &_dictionary, OutputArrayOfArrays _corners,
                    OutputArray _ids, const Ptr<DetectorParameters> &_params,
                    OutputArrayOfArrays _rejectedImgPoints, InputArrayOfArrays camMatrix, InputArrayOfArrays distCoeff) {
-
+    std::cout << "CV_Assert(!_image.empty())" << std::endl;
     CV_Assert(!_image.empty());
 
+    std::cout << "Convert to gray" << std::endl;
     Mat grey;
     _convertToGrey(_image.getMat(), grey);
 
+    std::cout << "Step 1: Detect marker candidates" << std::endl;
     /// STEP 1: Detect marker candidates
     vector< vector< Point2f > > candidates;
     vector< vector< Point > > contours;
@@ -1176,8 +1180,10 @@ void detectMarkers(InputArray _image, const Ptr<Dictionary> &_dictionary, Output
 
     vector< vector< vector< Point2f > > > candidatesSet;
     vector< vector< vector< Point > > > contoursSet;
+    std::cout << "Step 1 - 2" << std::endl;
     /// STEP 1.a Detect marker candidates :: using AprilTag
     if(_params->cornerRefinementMethod == CORNER_REFINE_APRILTAG){
+        std::cout << "Step 1.a" << std::endl;
         _apriltag(grey, _params, candidates, contours);
 
         candidatesSet.push_back(candidates);
@@ -1185,9 +1191,12 @@ void detectMarkers(InputArray _image, const Ptr<Dictionary> &_dictionary, Output
     }
 
     /// STEP 1.b Detect marker candidates :: traditional way
-    else
+    else {
+        std::cout << "Step 1.b" << std::endl;
         _detectCandidates(grey, candidatesSet, contoursSet, _params);
+    }
 
+    std::cout << "Step 2" << std::endl;
     /// STEP 2: Check candidate codification (identify markers)
     _identifyCandidates(grey, candidatesSet, contoursSet, _dictionary, candidates, contours, ids, _params,
                         _rejectedImgPoints);
@@ -1196,6 +1205,7 @@ void detectMarkers(InputArray _image, const Ptr<Dictionary> &_dictionary, Output
     _copyVector2Output(candidates, _corners);
     Mat(ids).copyTo(_ids);
 
+    std::cout << "Step 3" << std::endl;
     /// STEP 3: Corner refinement :: use corner subpix
     if( _params->cornerRefinementMethod == CORNER_REFINE_SUBPIX ) {
         CV_Assert(_params->cornerRefinementWinSize > 0 && _params->cornerRefinementMaxIterations > 0 &&
@@ -1215,6 +1225,7 @@ void detectMarkers(InputArray _image, const Ptr<Dictionary> &_dictionary, Output
                       MarkerSubpixelParallel(&grey, _corners, _params));
     }
 
+    std::cout << "Step 3, Optional" << std::endl;
     /// STEP 3, Optional : Corner refinement :: use contour container
     if( _params->cornerRefinementMethod == CORNER_REFINE_CONTOUR){
 
