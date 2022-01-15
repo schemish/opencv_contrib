@@ -81,7 +81,7 @@ inline static bool saveCameraParams2(const std::string &filename, cv::Size image
     fs << "tvecs_len" << static_cast<int>(tvecs.size());
     fs << "rvecs_len" << static_cast<int>(rvecs.size());
     fs << "tvecs" << tvecs;
-    fs << "rvecs" << tvecs;
+    fs << "rvecs" << rvecs;
 
     return true;
 }

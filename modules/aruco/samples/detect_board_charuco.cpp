@@ -41,6 +41,10 @@ the use of this software, even if advised of the possibility of such damage.
 #include <opencv2/aruco/charuco.hpp>
 #include <vector>
 #include <iostream>
+
+#include <future>
+#include <chrono>
+
 #include "aruco_samples_utility.hpp"
 
 using namespace std;
@@ -175,19 +179,19 @@ int main(int argc, char *argv[]) {
         vector< Point2f > charucoCorners;
         Vec3d rvec, tvec;
 
-        std::cout << "detect markers" << std::endl;
+        //std::cout << "detect markers" << std::endl;
         // detect markers
         aruco::detectMarkers(image, dictionary, markerCorners, markerIds, detectorParams,
                              rejectedMarkers);
 
         // refind strategy to detect more markers
         if(refindStrategy) {
-            std::cout << "refind strategy to detect more markers" << std::endl;
+            //std::cout << "refind strategy to detect more markers" << std::endl;
             aruco::refineDetectedMarkers(image, board, markerCorners, markerIds, rejectedMarkers,
                                          camMatrix, distCoeffs);
         }
 
-        std::cout << "interpolate charuco corners" << std::endl;
+        //std::cout << "interpolate charuco corners" << std::endl;
         // interpolate charuco corners
         int interpolatedCorners = 0;
         if(markerIds.size() > 0)
@@ -195,7 +199,7 @@ int main(int argc, char *argv[]) {
                 aruco::interpolateCornersCharuco(markerCorners, markerIds, image, charucoboard,
                                                  charucoCorners, charucoIds, camMatrix, distCoeffs);
 
-        std::cout << "estimate charuco board pose" << std::endl;
+        //std::cout << "estimate charuco board pose" << std::endl;
         // estimate charuco board pose
         bool validPose = false;
         if(camMatrix.total() != 0)
@@ -218,33 +222,41 @@ int main(int argc, char *argv[]) {
         // draw results
         image.copyTo(imageCopy);
         if(markerIds.size() > 0) {
-            std::cout << "drawDetectedMarkers - 1" << std::endl;
+            //std::cout << "drawDetectedMarkers - 1" << std::endl;
             aruco::drawDetectedMarkers(imageCopy, markerCorners);
         }
 
         if(showRejected && rejectedMarkers.size() > 0) {
-            std::cout << "drawDetectedMarkers - 2" << std::endl;
+            //std::cout << "drawDetectedMarkers - 2" << std::endl;
             aruco::drawDetectedMarkers(imageCopy, rejectedMarkers, noArray(), Scalar(100, 0, 255));
         }
 
         if(interpolatedCorners > 0) {
-            std::cout << "drawDetectedCornersCharuco" << std::endl;
+            //std::cout << "drawDetectedCornersCharuco" << std::endl;
             Scalar color;
             color = Scalar(255, 0, 0);
             aruco::drawDetectedCornersCharuco(imageCopy, charucoCorners, charucoIds, color);
         }
 
         if(validPose) {
-            std::cout << "drawAxis" << std::endl;            
+            //std::cout << "drawAxis" << std::endl;            
             aruco::drawAxis(imageCopy, camMatrix, distCoeffs, rvec, tvec, axisLength);
         }
 
-        std::cout << "imshow() commented out" << std::endl;
-        if (false) {        
+        char key = 'c';
+        if (false) {  // temporarily remove drawing on screen
             imshow("out", imageCopy);
-            char key = (char)waitKey(waitTime);
-            if(key == 27) break;
+            key = (char)waitKey(waitTime);
+        } else {  // temporary logic: if from camera do only kMaxFrames, else read all files
+            if (video.empty()) {
+                const int kMaxFrames = 10;
+                if (totalIterations > kMaxFrames) {
+                    key = 27;
+                    std::cout << "Reached max N of frames " << kMaxFrames << std::endl;
+                } 
+            }
         }
+        if(key == 27) break;
     }
 
     return 0;

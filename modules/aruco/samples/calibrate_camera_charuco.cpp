@@ -184,61 +184,65 @@ int main(int argc, char *argv[]) {
         vector< int > ids;
         vector< vector< Point2f > > corners, rejected;
 
-        std::cout << "detect markers" << std::endl;
+        //std::cout << "detect markers" << std::endl;
         // detect markers
         aruco::detectMarkers(image, dictionary, corners, ids, detectorParams, rejected);
 
         // refind strategy to detect more markers
         if(refindStrategy) {
-            std::cout << "refind strategy to detect more markers" << std::endl;
+            //std::cout << "refind strategy to detect more markers" << std::endl;
             aruco::refineDetectedMarkers(image, board, corners, ids, rejected);
         }
 
         // interpolate charuco corners
         Mat currentCharucoCorners, currentCharucoIds;
         if(ids.size() > 0) {
-            std::cout << "interpolate charuco corners" << std::endl;
+            //std::cout << "interpolate charuco corners" << std::endl;
             aruco::interpolateCornersCharuco(corners, ids, image, charucoboard, currentCharucoCorners,
                                              currentCharucoIds);
         }
 
-        std::cout << "draw results" << std::endl;
+        //std::cout << "draw results" << std::endl;
         // draw results
         image.copyTo(imageCopy);
 
         if(ids.size() > 0) {
-            std::cout << "drawDetectedMarkers - 1" << std::endl;
+            //std::cout << "drawDetectedMarkers" << ids.size() << std::endl;
             aruco::drawDetectedMarkers(imageCopy, corners);
         }
 
         if(currentCharucoCorners.total() > 0) {
-            std::cout << "drawDetectedCornersCharuco" << std::endl;
+            //std::cout << "drawDetectedCornersCharuco" << std::endl;
             aruco::drawDetectedCornersCharuco(imageCopy, currentCharucoCorners, currentCharucoIds);
         }
 
-        putText(imageCopy, "Press 'c' to add current frame. 'ESC' to finish and calibrate",
-                Point(10, 20), FONT_HERSHEY_SIMPLEX, 0.5, Scalar(255, 0, 0), 2);
-
-        std::cout << "imshow() commented out" << std::endl;
-        if (false) {        
-            imshow("out", imageCopy);
-            char key = (char)waitKey(waitTime);
-            if(key == 27) break;
-            if(key == 'c' && ids.size() > 0) {
-                cout << "Frame captured" << endl;
-                allCorners.push_back(corners);
-                allIds.push_back(ids);
-                allImgs.push_back(image);
-                imgSize = image.size();
-            }
+        char key;
+        if (false) {  // temporarily remove drawing on screen 
+                putText(imageCopy, "Press 'c' to add current frame. 'ESC' to finish and calibrate",
+                    Point(10, 20), FONT_HERSHEY_SIMPLEX, 0.5, Scalar(255, 0, 0), 2);
+                imshow("out", imageCopy);
+                key = (char)waitKey(waitTime);
         } else {
-            if(ids.size() > 0) {
-                cout << "Frame captured" << endl;
-                allCorners.push_back(corners);
-                allIds.push_back(ids);
-                allImgs.push_back(image);
-                imgSize = image.size();
+            if (video.empty()) {  // this is a hack for now
+                const int kMaxFrames = 10;
+                if (totalIterations <= kMaxFrames) {
+                    key = 'c';
+                } else {
+                    key = 27;
+                    std::cout << "Reached max N of frames " << kMaxFrames << std::endl;
+                } 
+            } else {
+                key = 'c';  // go through all frames for now
             }
+        }
+
+        if(key == 27) break;
+        if((key == 'c') && (ids.size() > 0)) {
+            cout << "Frame captured" << endl;
+            allCorners.push_back(corners);
+            allIds.push_back(ids);
+            allImgs.push_back(image);
+            imgSize = image.size();
         }
     }
 
